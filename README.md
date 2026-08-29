@@ -1,446 +1,762 @@
-# MyNetScanner
+# NetGuard
 
-**Network visibility, change detection, and attack-surface monitoring for your local network.**
+**Network visibility, change detection, attack-surface monitoring, and policy enforcement for authorized networks.**
 
-MyNetWatcher is a cross-platform network monitoring tool built with **C# and .NET**. It discovers devices on a network, identifies exposed services, records network snapshots, detects changes between scans, and provides a simple view of the network's current attack surface.
+NetGuard is a cross-platform network security application built with **C# and .NET**. It discovers devices and exposed services, maintains network snapshots, detects changes over time, evaluates the network's attack surface, and applies configurable security policies through the host firewall.
 
-The project is designed to be lightweight and understandable rather than a replacement for large tools such as Nmap, Nessus, or a full SIEM.
+The project is designed to be **lightweight, understandable, and explainable** rather than a replacement for tools such as Nmap, Nessus, SIEM platforms, or enterprise firewalls.
 
-> **Discover your network. Track what changes. Understand what is exposed.**
+> **Discover your network. Track what changes. Understand what is exposed. Control what is allowed.**
 
 ---
 
-## Features
+## Project Goals
 
-### Network Discovery
+NetGuard is built to explore practical network-security engineering using the .NET ecosystem.
 
-MyNetWatcher can inspect a local network and identify devices that are currently reachable.
+The project focuses on:
 
-* Detect local network interfaces
-* Automatically determine network ranges
-* Discover active hosts
-* Resolve hostnames where available
-* Identify MAC addresses where the platform permits it
-* Identify device vendors using MAC/OUI information
+* Network discovery and service enumeration
+* Network inventory and historical snapshots
+* Change detection
+* Attack-surface monitoring
+* Device trust and security policies
+* Firewall rule evaluation and enforcement
+* Security event collection
+* Explainable risk assessment
+* REST APIs and web-based monitoring
+* Cloud deployment with Azure
+* Automated testing and CI/CD
 
-### Port & Service Discovery
+The goal is not to build another Nmap or enterprise firewall.
 
-For discovered hosts, MyNetWatcher can inspect TCP ports and record detected services.
+The goal is to understand how **network visibility, security policy, enforcement, and monitoring fit together into one system.**
+
+---
+
+## Architecture
+
+```text
+                         ┌─────────────────────┐
+                         │      NetGuard       │
+                         └──────────┬──────────┘
+                                    │
+                ┌───────────────────┼───────────────────┐
+                │                   │                   │
+                ▼                   ▼                   ▼
+        ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+        │    Network    │   │   Security    │   │   Firewall    │
+        │    Engine     │   │    Engine     │   │    Engine     │
+        └───────┬───────┘   └───────┬───────┘   └───────┬───────┘
+                │                   │                   │
+        ┌───────┼───────┐     ┌─────┼──────┐      ┌─────┼──────┐
+        │       │       │     │     │      │      │     │      │
+        ▼       ▼       ▼     ▼     ▼      ▼      ▼     ▼      ▼
+    Discovery  Ports  DNS   Trust  Risk  Events  Rules Policy  Status
+        │       │       │     │     │      │      │     │      │
+        └───────┴───────┴─────┴─────┴──────┴──────┴─────┴──────┘
+                                    │
+                                    ▼
+                           ┌─────────────────┐
+                           │   Persistence   │
+                           │  EF Core / DB   │
+                           └────────┬────────┘
+                                    │
+                                    ▼
+                           ┌─────────────────┐
+                           │  ASP.NET Core   │
+                           │       API       │
+                           └────────┬────────┘
+                                    │
+                                    ▼
+                           ┌─────────────────┐
+                           │    Dashboard    │
+                           │     Blazor      │
+                           └─────────────────┘
+```
+
+NetGuard separates **observation** from **enforcement**.
+
+The network engine observes the environment, while the policy and firewall components determine what should be allowed or blocked.
+
+---
+
+# Features
+
+## Network Visibility
+
+NetGuard maintains an inventory of devices and services discovered on the local network.
+
+* Automatic interface discovery
+* Network range detection
+* Host discovery
+* IP address tracking
+* MAC address tracking where available
+* Hostname resolution
+* Vendor identification where available
+* TCP service discovery
+* Configurable scan ranges
+* Periodic scanning
+* Device inventory
 
 Example:
 
 ```text
+NETWORK INVENTORY
+
 192.168.1.1
-├── 53/tcp    DNS
-├── 80/tcp    HTTP
-└── 443/tcp   HTTPS
+  Router
+  80/tcp    HTTP
+  443/tcp   HTTPS
 
 192.168.1.20
-├── 22/tcp    SSH
-├── 80/tcp    HTTP
-└── 445/tcp   SMB
+  Laptop
+  22/tcp    SSH
+  631/tcp   IPP
+
+192.168.1.42
+  Unknown Device
+  80/tcp    HTTP
+  445/tcp   SMB
 ```
 
-The initial version focuses on practical TCP discovery rather than attempting to reproduce the functionality of a full vulnerability scanner.
+---
 
-### Network Snapshots
+# Network Snapshots
 
-Each scan produces a snapshot of the observed network.
+Every scan can produce a network snapshot.
+
+A snapshot records the observed state of the network at a specific point in time.
 
 ```text
-Snapshot #12
+Snapshot
 ────────────────────────────
-Devices:       17
-Open ports:    43
-Scan duration: 12.4 seconds
+
+Time:
+2026-08-29 10:42
+
+Devices:
+14
+
+Services:
+31
+
+Changes:
+3
 ```
 
-Snapshots allow MyNetWatcher to understand how the network changes over time.
+Snapshots allow NetGuard to answer questions such as:
 
-### Change Detection
+* What devices were present?
+* What services were exposed?
+* What changed since the previous scan?
+* When was a service first observed?
+* When was a device last seen?
 
-MyNetWatcher compares the current snapshot against previous observations.
+---
 
-It can identify events such as:
+# Change Detection
+
+NetGuard compares network snapshots to identify changes.
+
+### New Device
 
 ```text
 NEW DEVICE
-192.168.1.47
 
-NEW PORT
-192.168.1.20:8080
+192.168.1.72
+Unknown hostname
+Unknown vendor
 
-CLOSED PORT
-192.168.1.32:22
-
-DEVICE OFFLINE
-192.168.1.10
+First observed:
+2026-08-29 10:42
 ```
 
-This turns a simple network scanner into a monitoring tool.
+### New Service
 
-### Attack Surface
+```text
+SERVICE CHANGE
 
-MyNetWatcher provides a lightweight risk view based on the services discovered during scanning.
+Device:
+192.168.1.20
+
+Added:
+TCP/8080
+
+Previously:
+Not observed
+```
+
+### Removed Service
+
+```text
+SERVICE CHANGE
+
+Device:
+192.168.1.20
+
+Removed:
+TCP/445
+```
+
+Changes are stored as events so that network history can be investigated over time.
+
+---
+
+# Attack-Surface Monitoring
+
+NetGuard evaluates discovered services to provide a lightweight view of the network's exposed attack surface.
+
+It does **not** attempt to perform full vulnerability assessment.
+
+Instead, it focuses on questions such as:
+
+* Which devices expose services?
+* Which services appeared recently?
+* Which ports are considered sensitive?
+* Which devices have unusually large exposed surfaces?
+* Which services have changed since the previous snapshot?
 
 Example:
 
 ```text
-ATTACK SURFACE
-────────────────────────
+DEVICE
+192.168.1.20
 
-HIGH       1
-MEDIUM     4
-LOW       12
+Attack Surface
+────────────────────────────
+
+22/tcp      SSH
+80/tcp      HTTP
+445/tcp     SMB
+3389/tcp    RDP
+
+Risk: HIGH
+
+Reasons:
+• Multiple exposed services
+• Remote-access service detected
+• SMB exposed
 ```
 
-Initial rules are intentionally simple and explainable.
+Risk decisions are designed to remain **explainable** rather than relying on an opaque machine-learning model.
+
+---
+
+# Device Trust
+
+Devices can be assigned a security state:
+
+```text
+TRUSTED
+UNKNOWN
+RESTRICTED
+BLOCKED
+```
+
+Trust state can influence the policies applied to a device.
 
 For example:
 
 ```text
-23/tcp     Telnet       HIGH
-445/tcp    SMB          MEDIUM
-3389/tcp   RDP          MEDIUM
-22/tcp     SSH          LOW
-80/tcp     HTTP         LOW
+UNKNOWN DEVICE POLICY
+
+HTTPS       ALLOW
+DNS         ALLOW
+SSH         BLOCK
+SMB         BLOCK
+RDP         BLOCK
 ```
 
-The project does **not** attempt to perform exploitation or comprehensive vulnerability assessment.
+This allows NetGuard to treat newly discovered or untrusted devices differently from known devices.
 
 ---
 
-# Dashboard
+# Firewall & Policy Enforcement
 
-The planned dashboard provides a high-level view of the network.
+NetGuard includes a configurable policy engine for controlling network communication.
+
+Policies can define:
+
+* Source IP / CIDR
+* Destination IP / CIDR
+* TCP / UDP
+* Source ports
+* Destination ports
+* Allow / deny actions
+* Rule priority
+* Rule descriptions
+* Enable / disable state
+* Device trust requirements
+
+Example:
 
 ```text
-┌───────────────────────────────────────────────────────┐
-│ MyNetWatcher                                           │
-├───────────────────────────────────────────────────────┤
-│                                                       │
-│  NETWORK OVERVIEW                                     │
-│                                                       │
-│  Devices        17       Open Ports       43          │
-│  Online         15       Changes           3          │
-│                                                       │
-├───────────────────────────────────────────────────────┤
-│                                                       │
-│  RECENT CHANGES                                       │
-│                                                       │
-│  + New device       192.168.1.47                      │
-│  + New port         192.168.1.20:8080                 │
-│  - Closed port      192.168.1.32:22                   │
-│                                                       │
-├───────────────────────────────────────────────────────┤
-│                                                       │
-│  ATTACK SURFACE                                       │
-│                                                       │
-│  HIGH        █                                         │
-│  MEDIUM      ████                                      │
-│  LOW         ████████████                              │
-│                                                       │
-└───────────────────────────────────────────────────────┘
+RULE #20
+
+Name:
+Block SMB from unknown devices
+
+Source:
+UNKNOWN
+
+Destination:
+192.168.1.0/24
+
+Protocol:
+TCP
+
+Port:
+445
+
+Action:
+DENY
+
+Priority:
+20
 ```
 
-The UI will be developed after the core scanning and snapshot functionality is working.
+Rules are evaluated according to their priority and matching conditions.
+
+### Firewall Integration
+
+NetGuard is **not intended to replace the operating system's firewall subsystem**.
+
+Instead, NetGuard acts as a policy and management layer and integrates with the host firewall for enforcement.
+
+```text
+NetGuard
+    │
+    ▼
+Policy Engine
+    │
+    ▼
+Firewall Adapter
+    │
+    ▼
+Host Firewall
+    │
+    ▼
+Network Traffic
+```
+
+This keeps the project focused on security policy, orchestration, monitoring, and engineering rather than implementing packet filtering inside the kernel.
 
 ---
 
-# Architecture
+# Security Events
 
-MyNetWatcher is divided into separate components so that the network engine is independent from the web interface.
+Firewall activity and network changes can produce security events.
 
-```text
-                         MyNetWatcher
-                              │
-                ┌─────────────┴─────────────┐
-                │                           │
-          Network Engine              Web Application
-                │                           │
-        ┌───────┼────────┐            ┌─────┴─────┐
-        │       │        │            │           │
-     Discovery  TCP    Snapshot     ASP.NET     Blazor
-                         Engine       Core
-                           │            │
-                           └──────┬─────┘
-                                  │
-                              Database
-```
-
-The intended project structure is:
+Example:
 
 ```text
-MyNetWatcher/
-│
-├── src/
-│   ├── MyNetWatcher.Core/
-│   ├── MyNetWatcher.Scanner/
-│   ├── MyNetWatcher.Risk/
-│   ├── MyNetWatcher.Infrastructure/
-│   ├── MyNetWatcher.Api/
-│   └── MyNetWatcher.Web/
-│
-├── tests/
-│   ├── MyNetWatcher.Core.Tests/
-│   ├── MyNetWatcher.Scanner.Tests/
-│   └── MyNetWatcher.Risk.Tests/
-│
-├── docs/
-│
-└── README.md
+SECURITY EVENT
+
+Time:
+11:32:18
+
+Device:
+192.168.1.72
+
+Destination:
+192.168.1.20
+
+Protocol:
+TCP
+
+Port:
+445
+
+Action:
+BLOCKED
+
+Rule:
+Block SMB from unknown devices
+
+Reason:
+Policy violation
 ```
 
-### Core
+Events provide evidence for later investigation.
 
-Contains the domain models and application logic.
+---
 
-Examples:
+# Security Intelligence
+
+NetGuard correlates network observations, policy decisions, and security events.
+
+Example:
 
 ```text
-Network
-Device
-Port
-Service
-Scan
-Snapshot
-Change
-Finding
+New device detected
+        │
+        ▼
+Device is UNKNOWN
+        │
+        ▼
+Restricted policy applied
+        │
+        ▼
+SMB connection attempted
+        │
+        ▼
+Firewall blocks connection
+        │
+        ▼
+Security event recorded
+        │
+        ▼
+Policy violation detected
+        │
+        ▼
+Risk updated
+        │
+        ▼
+Alert + evidence
 ```
 
-### Scanner
+A device's security state can therefore be based on more than simply the ports it exposes.
 
-Responsible for interacting with the local network.
+Example:
 
 ```text
-Network interfaces
-CIDR ranges
-Host discovery
-TCP connections
-DNS resolution
-MAC addresses
+DEVICE
+192.168.1.42
+
+Risk: MEDIUM
+Trust: UNKNOWN
+
+Reasons:
+
+• New device
+• 3 previously unseen services
+• 27 blocked connection attempts
+• Attempted access to restricted subnet
 ```
 
-### Risk
+---
 
-Contains the rules used to evaluate the observed attack surface.
+# Detection Scenarios
 
-Rules should remain deterministic and explainable.
+NetGuard is designed around explicit, testable security scenarios.
 
-### Infrastructure
+| Scenario                      | Expected Result  |
+| ----------------------------- | ---------------- |
+| Trusted device → HTTPS        | Allow            |
+| Unknown device → HTTPS        | Allow            |
+| Unknown device → SMB          | Block            |
+| Device → restricted subnet    | Block            |
+| New service appears           | Alert            |
+| Unusual connection burst      | Alert            |
+| Previously unseen destination | Record           |
+| Policy violation              | Alert + evidence |
 
-Handles persistence and external infrastructure.
-
-The initial development environment will use a local database, with Azure services introduced later.
-
-### API
-
-ASP.NET Core API responsible for exposing scans, devices, snapshots, changes, and findings.
-
-### Web
-
-The browser-based dashboard.
+Additional policy tests verify rule priority, disabled rules, trust-state changes, repeated violations, and firewall failures.
 
 ---
 
 # Technology Stack
 
-## Core
+## Backend
 
 * **C#**
 * **.NET**
-* .NET Worker Services
-* `System.Net`
-* TCP/UDP sockets
-* Async/await
-* Cancellation tokens
-
-## Backend
-
 * **ASP.NET Core**
-* Entity Framework Core
-* REST API
-* Dependency Injection
-* Background services
+* **Entity Framework Core**
+* **.NET Worker Services**
+* `System.Net`
+* TCP/UDP networking
+* `async/await`
+* `CancellationToken`
 
 ## Frontend
 
 * **Blazor**
-* HTML/CSS
-* JavaScript where necessary
+* HTML
+* CSS
+* JavaScript where required
 
-## Database
+## Storage
 
 Development:
 
 * SQLite
 
-Production/cloud:
+Production:
 
-* Azure SQL or PostgreSQL
+* Azure SQL
 
-## Azure
+## Cloud
 
-Azure will be introduced as the project develops.
-
-Planned services include:
-
-* Azure App Service or Azure Container Apps
+* **Microsoft Azure**
+* Azure App Service or Container Apps
 * Azure SQL
 * Azure Blob Storage
-* Azure Application Insights
-* Azure Key Vault
-* Azure Service Bus
+* Application Insights
+* Azure Key Vault where appropriate
 
-Not every service is required for the initial release.
+Azure services are introduced progressively rather than being required for local development.
 
-## Development
+---
 
-* Linux
+# Project Structure
+
+```text
+netguard/
+├── src/
+│   ├── NetGuard.Api/
+│   │   ├── Controllers/
+│   │   ├── Services/
+│   │   └── Program.cs
+│   │
+│   ├── NetGuard.Core/
+│   │   ├── Models/
+│   │   ├── Policies/
+│   │   ├── Risk/
+│   │   └── Interfaces/
+│   │
+│   ├── NetGuard.Network/
+│   │   ├── Discovery/
+│   │   ├── Scanning/
+│   │   ├── Interfaces/
+│   │   └── Snapshots/
+│   │
+│   ├── NetGuard.Firewall/
+│   │   ├── Rules/
+│   │   ├── Adapters/
+│   │   └── Enforcement/
+│   │
+│   ├── NetGuard.Persistence/
+│   │   ├── DbContext/
+│   │   ├── Configurations/
+│   │   └── Migrations/
+│   │
+│   └── NetGuard.Web/
+│       ├── Components/
+│       ├── Pages/
+│       └── Services/
+│
+├── tests/
+│   ├── NetGuard.Core.Tests/
+│   ├── NetGuard.Network.Tests/
+│   ├── NetGuard.Firewall.Tests/
+│   └── NetGuard.IntegrationTests/
+│
+├── docs/
+├── scripts/
+├── docker/
+├── .github/
+│   └── workflows/
+├── NetGuard.sln
+├── Dockerfile
+├── README.md
+└── LICENSE
+```
+
+---
+
+# Quick Start
+
+## Requirements
+
+* .NET SDK
+* Linux, Windows, or macOS
 * Git
-* GitHub
-* Docker
-* GitHub Actions
+* A local network for authorized testing
+
+For firewall enforcement, some features may require appropriate operating-system permissions.
+
+> NetGuard should only be used on networks and systems you own or are explicitly authorized to assess.
 
 ---
 
-# How It Works
+## Clone
 
-A typical scan follows this process:
-
-```text
-1. Detect local interfaces
-          │
-          ▼
-2. Determine target network
-          │
-          ▼
-3. Discover active hosts
-          │
-          ▼
-4. Identify host information
-          │
-          ▼
-5. Scan selected TCP ports
-          │
-          ▼
-6. Identify known services
-          │
-          ▼
-7. Create network snapshot
-          │
-          ▼
-8. Compare with previous snapshot
-          │
-          ▼
-9. Generate changes
-          │
-          ▼
-10. Evaluate attack surface
-          │
-          ▼
-11. Store results
+```bash
+git clone https://github.com/yourusername/netguard.git
+cd netguard
 ```
 
-The important distinction is that the scanner does not simply return a list of open ports.
+## Restore dependencies
 
-It produces **state**.
+```bash
+dotnet restore
+```
 
-That state can then be compared over time.
+## Build
+
+```bash
+dotnet build
+```
+
+## Run
+
+```bash
+dotnet run --project src/NetGuard.Api
+```
+
+Start the web application:
+
+```bash
+dotnet run --project src/NetGuard.Web
+```
 
 ---
 
-# Example
+# Configuration
 
-Suppose the first scan discovers:
+Example configuration:
 
-```text
-192.168.1.20
-
-22/tcp
-80/tcp
-443/tcp
+```json
+{
+  "NetGuard": {
+    "ScanIntervalMinutes": 5,
+    "ConnectionTimeoutMilliseconds": 1000,
+    "DefaultPolicy": "Allow",
+    "MonitorChanges": true
+  }
+}
 ```
 
-The next scan discovers:
+Sensitive configuration such as credentials and cloud secrets should not be committed to source control.
 
-```text
-192.168.1.20
-
-22/tcp
-80/tcp
-443/tcp
-8080/tcp
-```
-
-MyNetWatcher calculates:
-
-```text
-CHANGE DETECTED
-
-Host:
-192.168.1.20
-
-Change:
-Port opened
-
-Port:
-8080/tcp
-
-Previous:
-Closed
-
-Current:
-Open
-```
-
-The risk engine can then evaluate the newly exposed service.
+Local development secrets should use the appropriate .NET development secret mechanisms or environment variables.
 
 ---
 
-# Azure Architecture
+# API
 
-Once the local version is stable, MyNetWatcher can be extended into a cloud-backed architecture.
+The ASP.NET Core API exposes network and security information to the dashboard.
 
-```text
-                       Azure
-                         │
-                 ┌───────▼────────┐
-                 │  ASP.NET Core  │
-                 │      API       │
-                 └───────┬────────┘
-                         │
-             ┌───────────┼───────────┐
-             │           │           │
-             ▼           ▼           ▼
-        Azure SQL     Blob       App Insights
-                      Storage
-                         │
-                         │
-                    Scan Reports
+Example endpoints:
+
+| Method | Endpoint               | Description                      |
+| ------ | ---------------------- | -------------------------------- |
+| GET    | `/api/devices`         | List discovered devices          |
+| GET    | `/api/devices/{id}`    | Get device details               |
+| GET    | `/api/scans`           | List network snapshots           |
+| GET    | `/api/changes`         | List detected changes            |
+| GET    | `/api/events`          | List security events             |
+| GET    | `/api/rules`           | List firewall rules              |
+| POST   | `/api/rules`           | Create a firewall rule           |
+| PUT    | `/api/rules/{id}`      | Update a firewall rule           |
+| DELETE | `/api/rules/{id}`      | Delete a firewall rule           |
+| GET    | `/api/firewall/status` | Get firewall status              |
+| POST   | `/api/scans`           | Start an authorized network scan |
+
+The API documentation is available through ASP.NET Core's OpenAPI/Swagger tooling during development.
+
+---
+
+# Testing
+
+NetGuard uses automated tests for the policy engine, network state handling, change detection, and API behavior.
+
+Run the test suite:
+
+```bash
+dotnet test
 ```
 
-A future version can support remote agents:
+Testing focuses particularly on deterministic security behavior.
+
+Example:
 
 ```text
-                         Azure
-                           │
-                    ┌──────▼──────┐
-                    │ Control API │
-                    └──────┬──────┘
-                           │
-                      Service Bus
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-              ▼            ▼            ▼
-           Agent A      Agent B      Agent C
-            Linux        Linux       Windows
-              │            │            │
-             LAN A        LAN B        LAN C
+Unknown device + TCP/445
+        ↓
+Policy evaluation
+        ↓
+DENY
 ```
 
-This allows MyNetWatcher to eventually monitor multiple networks without requiring the Azure service itself to have direct access to those networks.
+and:
+
+```text
+Trusted device + HTTPS
+        ↓
+Policy evaluation
+        ↓
+ALLOW
+```
+
+Firewall integration tests should use a controlled test environment and should never modify firewall policy on an unintended system.
+
+---
+
+# Azure Deployment
+
+NetGuard is designed to support deployment to Microsoft Azure.
+
+A production deployment can use:
+
+```text
+                    Azure
+                      │
+          ┌───────────┼───────────┐
+          │           │           │
+          ▼           ▼           ▼
+     App Service   Azure SQL   Blob Storage
+          │           │           │
+          └───────────┼───────────┘
+                      │
+                      ▼
+              Application Insights
+```
+
+Potential Azure components include:
+
+### Azure App Service / Container Apps
+
+Hosts the ASP.NET Core application.
+
+### Azure SQL
+
+Stores:
+
+* Devices
+* Network snapshots
+* Services
+* Security events
+* Firewall policies
+* Risk findings
+
+### Azure Blob Storage
+
+Can store generated reports and exported historical data.
+
+### Application Insights
+
+Provides:
+
+* Application telemetry
+* Request monitoring
+* Exceptions
+* Performance data
+
+### Key Vault
+
+Used for production secrets and credentials where required.
+
+---
+
+# Security Considerations
+
+NetGuard is an **authorization-first defensive tool**.
+
+Use it only against:
+
+* Networks you own
+* Systems you administer
+* Lab environments
+* Environments where you have explicit authorization
+
+NetGuard should not be used to scan or interfere with networks belonging to other people or organizations.
+
+Firewall changes can affect network connectivity. Development and integration testing should therefore be performed inside an isolated or disposable environment whenever possible.
+
+NetGuard does not intentionally collect passwords, private keys, or other authentication secrets.
 
 ---
 
@@ -448,149 +764,187 @@ This allows MyNetWatcher to eventually monitor multiple networks without requiri
 
 ## Phase 1 — Network Engine
 
-* [ ] Detect local network interfaces
-* [ ] Parse CIDR ranges
-* [ ] Discover active hosts
-* [ ] Resolve hostnames
-* [ ] Discover MAC addresses where available
-* [ ] Scan TCP ports
-* [ ] Identify common services
-* [ ] Build command-line interface
+* [ ] Network interface discovery
+* [ ] CIDR parsing
+* [ ] Host discovery
+* [ ] TCP service scanning
+* [ ] Hostname resolution
+* [ ] Device model
 
-## Phase 2 — Snapshots
+## Phase 2 — Network Inventory
 
-* [ ] Create scan snapshots
-* [ ] Persist scan results
-* [ ] Introduce SQLite
-* [ ] Compare snapshots
-* [ ] Detect new devices
-* [ ] Detect removed devices
-* [ ] Detect opened ports
-* [ ] Detect closed ports
+* [ ] Network snapshots
+* [ ] Persistent device inventory
+* [ ] Service history
+* [ ] New device detection
+* [ ] Removed device detection
+* [ ] New service detection
+* [ ] Removed service detection
+* [ ] Snapshot comparison
 
-## Phase 3 — Risk Analysis
+## Phase 3 — Firewall & Policy Engine
 
-* [ ] Create rule-based risk engine
-* [ ] Categorize common services
-* [ ] Add severity levels
-* [ ] Explain why a finding was generated
-* [ ] Add attack-surface summary
+* [ ] Rule model
+* [ ] Allow/deny evaluation
+* [ ] Source/destination matching
+* [ ] TCP/UDP matching
+* [ ] Port matching
+* [ ] Rule priorities
+* [ ] Enable/disable rules
+* [ ] Default policy
+* [ ] Device trust states
+* [ ] Firewall abstraction
+* [ ] Linux firewall adapter
+* [ ] Firewall status
+* [ ] Rule hit counters
 
-## Phase 4 — Web Dashboard
+## Phase 4 — Security Intelligence
+
+* [ ] Security event model
+* [ ] Blocked connection logging
+* [ ] Policy violation detection
+* [ ] Unusual connection detection
+* [ ] Previously unseen destination detection
+* [ ] Attack-surface scoring
+* [ ] Explainable risk findings
+* [ ] Evidence records
+* [ ] Alert system
+
+## Phase 5 — Web Application
 
 * [ ] ASP.NET Core API
+* [ ] OpenAPI documentation
 * [ ] Blazor dashboard
-* [ ] Device list
-* [ ] Device details
+* [ ] Device inventory
+* [ ] Network topology/inventory view
 * [ ] Scan history
-* [ ] Change history
-* [ ] Attack-surface dashboard
-* [ ] Filtering and sorting
+* [ ] Change timeline
+* [ ] Attack-surface view
+* [ ] Firewall rules
+* [ ] Security events
+* [ ] Risk findings
 
-## Phase 5 — Azure
+## Phase 6 — Azure
 
-* [ ] Containerize the application
-* [ ] Deploy API to Azure
-* [ ] Move persistent data to Azure SQL
-* [ ] Add Blob Storage for reports
-* [ ] Add Application Insights
-* [ ] Add secure configuration with Key Vault
-* [ ] Set up GitHub Actions deployment
+* [ ] Azure deployment
+* [ ] Azure SQL
+* [ ] Application Insights
+* [ ] Blob Storage
+* [ ] Secure configuration
+* [ ] CI/CD pipeline
 
-## Future
+## Phase 7 — Validation
 
-* [ ] Scheduled scans
-* [ ] Notifications
-* [ ] Real-time updates with SignalR
-* [ ] Remote monitoring agents
-* [ ] Multi-network support
-* [ ] CSV/JSON/PDF reports
-* [ ] Authentication and role-based access
-
----
-
-# Security & Responsible Use
-
-MyNetWatcher is intended for monitoring networks that you own or have explicit authorization to assess.
-
-Network scanning can generate traffic and may trigger security controls or alerts.
-
-Use the software responsibly and only against authorized systems.
-
-MyNetWatcher is designed as a **visibility and monitoring tool**, not an exploitation framework.
-
-It does not intentionally attempt to:
-
-* exploit discovered services
-* bypass authentication
-* obtain credentials
-* compromise systems
-* evade security controls
+* [ ] Unit test suite
+* [ ] Integration tests
+* [ ] Policy evaluation tests
+* [ ] Firewall integration tests
+* [ ] Security scenario tests
+* [ ] Regression tests
+* [ ] Isolated network test environment
 
 ---
 
-# Development
+# Design Principles
 
-Clone the repository:
+### Explainability
 
-```bash
-git clone https://github.com/<your-username>/MyNetWatcher.git
-cd MyNetWatcher
+Security decisions should have a reason.
+
+```text
+BLOCKED
+
+Reason:
+Unknown device attempted SMB access
 ```
 
-Restore dependencies:
+rather than simply:
 
-```bash
-dotnet restore
+```text
+BLOCKED
 ```
 
-Build:
+### Least Privilege
 
-```bash
-dotnet build
-```
+Unknown devices should not automatically receive the same access as trusted devices.
 
-Run tests:
+### Defense in Depth
 
-```bash
-dotnet test
-```
+Network discovery, change detection, policy enforcement, and monitoring operate together rather than relying on a single security mechanism.
 
-Run the application:
+### Historical Evidence
 
-```bash
-dotnet run
-```
+Security decisions should be backed by observable events and historical network state.
 
-> The exact commands and project startup instructions will be updated as the implementation develops.
+### Safe by Default
+
+Scanning and firewall operations should require explicit configuration and authorization.
+
+### Cross-Platform
+
+The core application should remain portable across supported operating systems, while OS-specific firewall functionality is isolated behind platform-specific adapters.
 
 ---
 
-# Project Goals
+# What NetGuard Is Not
 
-MyNetScanner is primarily a learning and portfolio project focused on understanding how networking, backend development, security concepts, and cloud infrastructure fit together.
+NetGuard is intentionally **not**:
 
-The main goals are to gain practical experience with:
+* A replacement for Nmap
+* A vulnerability scanner
+* A full IDS/IPS
+* An antivirus product
+* A SIEM
+* A deep-packet-inspection engine
+* A commercial enterprise firewall
+* A kernel-level packet-filtering implementation
 
-* Network programming in C#
-* Asynchronous .NET applications
-* ASP.NET Core
-* Entity Framework Core
-* Background workers
-* State comparison and event detection
-* Security-oriented rule engines
-* REST APIs
-* Blazor
-* Azure
-* Docker
-* CI/CD
-* Automated testing
-* Application observability
+The project deliberately focuses on the intersection of:
 
-The project intentionally favors a **small, understandable architecture** over unnecessary complexity.
+```text
+Network Visibility
+       +
+Change Detection
+       +
+Attack-Surface Monitoring
+       +
+Policy Enforcement
+       +
+Security Evidence
+```
 
 ---
 
 # License
 
-This project will be released under the **MIT License**.
+MIT License — see [`LICENSE`](LICENSE).
+
+---
+
+# Author
+
+**Keletso Monyamane**
+
+GitHub: `@keletso-m`
+
+---
+
+## Project Status
+
+**Active Development**
+
+NetGuard is a learning and portfolio project focused on developing practical experience with:
+
+* C#
+* .NET
+* ASP.NET Core
+* Network programming
+* Security engineering
+* Policy engines
+* Firewall integration
+* Distributed/cloud application architecture
+* Azure
+* Automated testing
+* Production-oriented software engineering
+
+The project is developed incrementally, with functionality added only after the underlying component is understood and tested.
