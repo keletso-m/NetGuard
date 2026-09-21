@@ -2,21 +2,23 @@
 
 **Network visibility, change detection, attack-surface monitoring, and policy enforcement for authorized networks.**
 
-NetGuard is a cross-platform network security application built with **C# and .NET**. It discovers devices and exposed services, maintains network snapshots, detects changes over time, evaluates the network's attack surface, and applies configurable security policies through the host firewall.
+NetGuard is a network security application built from scratch in **Rust**. It discovers devices and exposed services, maintains network snapshots, detects changes over time, evaluates network attack surfaces, records security events, and applies configurable firewall policies.
 
-The project is designed to be **lightweight, understandable, and explainable** rather than a replacement for tools such as Nmap, Nessus, SIEM platforms, or enterprise firewalls.
+The project focuses on building a lightweight and explainable security system rather than replacing tools such as Nmap, Nessus, SIEM platforms, or enterprise firewalls.
 
 > **Discover your network. Track what changes. Understand what is exposed. Control what is allowed.**
 
 ---
 
-## Project Goals
+# Project Goals
 
-NetGuard is built to explore practical network-security engineering using the .NET ecosystem.
+NetGuard is designed to explore practical network-security engineering using the Rust ecosystem.
 
 The project focuses on:
 
-* Network discovery and service enumeration
+* Network interface and host discovery
+* Raw packet-based network discovery
+* TCP service enumeration
 * Network inventory and historical snapshots
 * Change detection
 * Attack-surface monitoring
@@ -24,60 +26,65 @@ The project focuses on:
 * Firewall rule evaluation and enforcement
 * Security event collection
 * Explainable risk assessment
-* REST APIs and web-based monitoring
-* Cloud deployment with Azure
-* Automated testing and CI/CD
+* REST API development
+* Web-based network monitoring
+* Structured logging and observability
+* Automated testing and benchmarking
+* Containerized deployment
+* CI/CD with GitHub Actions
 
 The goal is not to build another Nmap or enterprise firewall.
 
-The goal is to understand how **network visibility, security policy, enforcement, and monitoring fit together into one system.**
+The goal is to understand how **network visibility, security policy, enforcement, and monitoring fit together into one system**.
 
 ---
 
-## Architecture
+# Architecture
 
 ```text
-                         ┌─────────────────────┐
-                         │      NetGuard       │
-                         └──────────┬──────────┘
+                         ┌──────────────────────┐
+                         │       NetGuard       │
+                         └──────────┬───────────┘
                                     │
-                ┌───────────────────┼───────────────────┐
-                │                   │                   │
-                ▼                   ▼                   ▼
-        ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-        │    Network    │   │   Security    │   │   Firewall    │
-        │    Engine     │   │    Engine     │   │    Engine     │
-        └───────┬───────┘   └───────┬───────┘   └───────┬───────┘
-                │                   │                   │
-        ┌───────┼───────┐     ┌─────┼──────┐      ┌─────┼──────┐
-        │       │       │     │     │      │      │     │      │
-        ▼       ▼       ▼     ▼     ▼      ▼      ▼     ▼      ▼
-    Discovery  Ports  DNS   Trust  Risk  Events  Rules Policy  Status
-        │       │       │     │     │      │      │     │      │
-        └───────┴───────┴─────┴─────┴──────┴──────┴─────┴──────┘
-                                    │
-                                    ▼
-                           ┌─────────────────┐
-                           │   Persistence   │
-                           │  EF Core / DB   │
-                           └────────┬────────┘
-                                    │
-                                    ▼
-                           ┌─────────────────┐
-                           │  ASP.NET Core   │
-                           │       API       │
-                           └────────┬────────┘
-                                    │
-                                    ▼
-                           ┌─────────────────┐
-                           │    Dashboard    │
-                           │     Blazor      │
-                           └─────────────────┘
+             ┌──────────────────────┼──────────────────────┐
+             │                      │                      │
+             ▼                      ▼                      ▼
+      ┌─────────────┐       ┌──────────────┐       ┌──────────────┐
+      │   Network   │       │   Security   │       │   Firewall   │
+      │    Engine   │       │    Engine    │       │    Engine    │
+      └──────┬──────┘       └──────┬───────┘       └──────┬───────┘
+             │                      │                      │
+       ┌─────┼─────┐          ┌─────┼─────┐          ┌─────┼─────┐
+       │     │     │          │     │     │          │     │     │
+       ▼     ▼     ▼          ▼     ▼     ▼          ▼     ▼     ▼
+     ARP   ICMP  TCP        Trust   Risk  Events    Rules Policy Status
+     Scan  Scan  Scan
+       │     │     │
+       └─────┴─────┘
+             │
+             ▼
+      ┌─────────────────┐
+      │   Persistence   │
+      │ SQLite / Postgres│
+      └────────┬────────┘
+               │
+               ▼
+      ┌─────────────────┐
+      │    Axum API     │
+      └────────┬────────┘
+               │
+               ▼
+      ┌─────────────────┐
+      │    Dashboard    │
+      │   HTMX + HTML   │
+      └─────────────────┘
 ```
 
 NetGuard separates **observation** from **enforcement**.
 
-The network engine observes the environment, while the policy and firewall components determine what should be allowed or blocked.
+The network engine observes the environment, while the security and policy engines determine how that information should be interpreted and what actions should be taken.
+
+OS-specific firewall functionality is isolated behind a firewall abstraction so the core application remains portable.
 
 ---
 
@@ -87,17 +94,21 @@ The network engine observes the environment, while the policy and firewall compo
 
 NetGuard maintains an inventory of devices and services discovered on the local network.
 
-* Automatic interface discovery
-* Network range detection
-* Host discovery
+Features include:
+
+* Automatic network-interface discovery
+* CIDR/network range detection
+* ARP-based host discovery
+* ICMP-based host discovery
+* TCP service discovery
 * IP address tracking
 * MAC address tracking where available
 * Hostname resolution
 * Vendor identification where available
-* TCP service discovery
 * Configurable scan ranges
 * Periodic scanning
 * Device inventory
+* Optional packet capture using `pcap`
 
 Example:
 
@@ -106,18 +117,18 @@ NETWORK INVENTORY
 
 192.168.1.1
   Router
-  80/tcp    HTTP
-  443/tcp   HTTPS
+  80/tcp     HTTP
+  443/tcp    HTTPS
 
 192.168.1.20
   Laptop
-  22/tcp    SSH
-  631/tcp   IPP
+  22/tcp     SSH
+  631/tcp    IPP
 
 192.168.1.42
   Unknown Device
-  80/tcp    HTTP
-  445/tcp   SMB
+  80/tcp     HTTP
+  445/tcp    SMB
 ```
 
 ---
@@ -133,7 +144,7 @@ Snapshot
 ────────────────────────────
 
 Time:
-2026-08-29 10:42
+2026-09-21 20:42
 
 Devices:
 14
@@ -152,6 +163,10 @@ Snapshots allow NetGuard to answer questions such as:
 * What changed since the previous scan?
 * When was a service first observed?
 * When was a device last seen?
+* Which services disappeared?
+* Which devices are new?
+
+Snapshots can be serialized using `bincode` for internal storage or transport where appropriate.
 
 ---
 
@@ -169,7 +184,7 @@ Unknown hostname
 Unknown vendor
 
 First observed:
-2026-08-29 10:42
+2026-09-21 20:42
 ```
 
 ### New Service
@@ -199,13 +214,13 @@ Removed:
 TCP/445
 ```
 
-Changes are stored as events so that network history can be investigated over time.
+Changes are persisted as security and network events so that historical network activity can be investigated over time.
 
 ---
 
 # Attack-Surface Monitoring
 
-NetGuard evaluates discovered services to provide a lightweight view of the network's exposed attack surface.
+NetGuard provides a lightweight view of the network's exposed attack surface.
 
 It does **not** attempt to perform full vulnerability assessment.
 
@@ -226,10 +241,10 @@ DEVICE
 Attack Surface
 ────────────────────────────
 
-22/tcp      SSH
-80/tcp      HTTP
-445/tcp     SMB
-3389/tcp    RDP
+22/tcp       SSH
+80/tcp       HTTP
+445/tcp      SMB
+3389/tcp     RDP
 
 Risk: HIGH
 
@@ -256,7 +271,7 @@ BLOCKED
 
 Trust state can influence the policies applied to a device.
 
-For example:
+Example:
 
 ```text
 UNKNOWN DEVICE POLICY
@@ -318,7 +333,9 @@ Priority:
 
 Rules are evaluated according to their priority and matching conditions.
 
-### Firewall Integration
+---
+
+# Firewall Integration
 
 NetGuard is **not intended to replace the operating system's firewall subsystem**.
 
@@ -334,13 +351,19 @@ Policy Engine
 Firewall Adapter
     │
     ▼
-Host Firewall
+Linux nftables
     │
     ▼
 Network Traffic
 ```
 
-This keeps the project focused on security policy, orchestration, monitoring, and engineering rather than implementing packet filtering inside the kernel.
+Linux enforcement can use:
+
+* `nft`
+* `nftnl`
+* `rtnetlink`
+
+The firewall layer is isolated behind an internal abstraction so that platform-specific implementation does not leak into the core security engine.
 
 ---
 
@@ -354,7 +377,7 @@ Example:
 SECURITY EVENT
 
 Time:
-11:32:18
+20:32:18
 
 Device:
 192.168.1.72
@@ -379,6 +402,8 @@ Policy violation
 ```
 
 Events provide evidence for later investigation.
+
+Structured logging is implemented using the Rust `tracing` ecosystem.
 
 ---
 
@@ -452,51 +477,236 @@ NetGuard is designed around explicit, testable security scenarios.
 | Previously unseen destination | Record           |
 | Policy violation              | Alert + evidence |
 
-Additional policy tests verify rule priority, disabled rules, trust-state changes, repeated violations, and firewall failures.
+Additional policy tests verify:
+
+* Rule priority
+* Disabled rules
+* Trust-state changes
+* Repeated violations
+* Firewall failures
+* Policy conflicts
+* Invalid configuration
 
 ---
 
 # Technology Stack
 
-## Backend
+## Language & Runtime
 
-* **C#**
-* **.NET**
-* **ASP.NET Core**
-* **Entity Framework Core**
-* **.NET Worker Services**
-* `System.Net`
-* TCP/UDP networking
-* `async/await`
+* **Rust**
+* **Tokio**
+* Rust async/await
 * `CancellationToken`
+* `Arc`
+* `Mutex` / `RwLock` where appropriate
+* Rust channels and task coordination
 
-## Frontend
+Tokio provides the asynchronous runtime for network operations, background scanning, API handling, and internal task scheduling.
 
-* **Blazor**
-* HTML
-* CSS
-* JavaScript where required
+---
 
-## Storage
+## Network Discovery
 
-Development:
+* `pnet`
+* `socket2`
+* Standard Rust networking primitives
 
-* SQLite
+`pnet` provides access to lower-level networking functionality for tasks such as:
 
-Production:
+* ARP discovery
+* ICMP probing
+* Raw packet construction
+* Packet inspection
 
-* Azure SQL
+`socket2` is used where lower-level socket configuration is required.
 
-## Cloud
+---
 
-* **Microsoft Azure**
-* Azure App Service or Container Apps
-* Azure SQL
-* Azure Blob Storage
-* Application Insights
-* Azure Key Vault where appropriate
+## Packet Capture
 
-Azure services are introduced progressively rather than being required for local development.
+Optional deeper network visibility can be provided through:
+
+* `pcap`
+* libpcap
+
+Packet capture is intended to support additional visibility and security-event collection without making deep packet inspection a core requirement of the project.
+
+---
+
+## Firewall Enforcement
+
+Linux firewall integration can use:
+
+* `nft`
+* `nftnl`
+* `rtnetlink`
+
+The implementation is isolated behind a firewall adapter.
+
+```text
+FirewallEngine
+      │
+      ▼
+FirewallAdapter
+      │
+      ├── Linux / nftables
+      │
+      └── Future platform adapters
+```
+
+---
+
+## CLI
+
+NetGuard's command-line interface uses:
+
+* `clap`
+
+Example commands:
+
+```bash
+netguard scan
+netguard devices
+netguard services
+netguard changes
+netguard events
+netguard policy list
+netguard policy apply
+netguard firewall status
+```
+
+---
+
+## Serialization
+
+NetGuard uses:
+
+* `serde`
+* `serde_json`
+* `bincode`
+
+`serde_json` is used for configuration and API-facing serialization.
+
+`bincode` can be used for compact internal snapshots and binary persistence where appropriate.
+
+---
+
+## Persistence
+
+Database access uses:
+
+* `sqlx`
+* SQLite for development
+* PostgreSQL for production
+
+SQLite keeps local development simple while PostgreSQL provides a production-oriented relational backend without tying the application to a specific cloud provider.
+
+The persistence layer stores information such as:
+
+* Devices
+* Network snapshots
+* Services
+* Network changes
+* Security events
+* Firewall policies
+* Risk findings
+* Device trust state
+
+---
+
+## Web API
+
+The HTTP API is built with:
+
+* **Axum**
+* Tokio
+* `serde`
+* `serde_json`
+
+Example endpoints:
+
+| Method | Endpoint               | Description                      |
+| ------ | ---------------------- | -------------------------------- |
+| GET    | `/api/devices`         | List discovered devices          |
+| GET    | `/api/devices/:id`     | Get device details               |
+| GET    | `/api/scans`           | List network snapshots           |
+| GET    | `/api/changes`         | List detected changes            |
+| GET    | `/api/events`          | List security events             |
+| GET    | `/api/rules`           | List firewall rules              |
+| POST   | `/api/rules`           | Create a firewall rule           |
+| PUT    | `/api/rules/:id`       | Update a firewall rule           |
+| DELETE | `/api/rules/:id`       | Delete a firewall rule           |
+| GET    | `/api/firewall/status` | Get firewall status              |
+| POST   | `/api/scans`           | Start an authorized network scan |
+
+---
+
+# Dashboard
+
+The dashboard is designed to remain lightweight.
+
+The primary approach is:
+
+```text
+Axum
+  │
+  ├── HTML
+  ├── HTMX
+  └── JSON API
+```
+
+HTMX allows interactive dashboard functionality without requiring a large JavaScript frontend.
+
+Possible dashboard views include:
+
+* Device inventory
+* Network topology
+* Service inventory
+* Scan history
+* Change timeline
+* Attack surface
+* Security events
+* Firewall rules
+* Risk findings
+
+A Rust-native WebAssembly frontend using **Leptos** can be introduced later if a richer client-side application becomes useful.
+
+---
+
+# Logging & Observability
+
+NetGuard uses:
+
+* `tracing`
+* `tracing-subscriber`
+
+Structured logs provide visibility into:
+
+* Network scans
+* Discovery results
+* Policy evaluation
+* Firewall operations
+* Security events
+* API requests
+* Background tasks
+* Errors and failures
+
+Example:
+
+```text
+INFO network_scan_started
+  interface=eth0
+  network=192.168.1.0/24
+
+INFO device_discovered
+  ip=192.168.1.42
+  mac=AA:BB:CC:DD:EE:FF
+
+WARN policy_violation
+  device=192.168.1.42
+  destination=192.168.1.20
+  port=445
+```
 
 ---
 
@@ -505,50 +715,68 @@ Azure services are introduced progressively rather than being required for local
 ```text
 netguard/
 ├── src/
-│   ├── NetGuard.Api/
-│   │   ├── Controllers/
-│   │   ├── Services/
-│   │   └── Program.cs
+│   ├── api/
+│   │   ├── handlers/
+│   │   ├── routes/
+│   │   └── middleware/
 │   │
-│   ├── NetGuard.Core/
-│   │   ├── Models/
-│   │   ├── Policies/
-│   │   ├── Risk/
-│   │   └── Interfaces/
+│   ├── cli/
+│   │   └── commands/
 │   │
-│   ├── NetGuard.Network/
-│   │   ├── Discovery/
-│   │   ├── Scanning/
-│   │   ├── Interfaces/
-│   │   └── Snapshots/
+│   ├── core/
+│   │   ├── models/
+│   │   ├── policies/
+│   │   ├── risk/
+│   │   ├── events/
+│   │   └── traits/
 │   │
-│   ├── NetGuard.Firewall/
-│   │   ├── Rules/
-│   │   ├── Adapters/
-│   │   └── Enforcement/
+│   ├── network/
+│   │   ├── discovery/
+│   │   ├── arp/
+│   │   ├── icmp/
+│   │   ├── scanning/
+│   │   ├── packets/
+│   │   └── snapshots/
 │   │
-│   ├── NetGuard.Persistence/
-│   │   ├── DbContext/
-│   │   ├── Configurations/
-│   │   └── Migrations/
+│   ├── firewall/
+│   │   ├── rules/
+│   │   ├── adapters/
+│   │   ├── nftables/
+│   │   └── enforcement/
 │   │
-│   └── NetGuard.Web/
-│       ├── Components/
-│       ├── Pages/
-│       └── Services/
+│   ├── persistence/
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   └── migrations/
+│   │
+│   ├── security/
+│   │   ├── detection/
+│   │   ├── correlation/
+│   │   └── intelligence/
+│   │
+│   ├── config/
+│   ├── telemetry/
+│   └── main.rs
 │
 ├── tests/
-│   ├── NetGuard.Core.Tests/
-│   ├── NetGuard.Network.Tests/
-│   ├── NetGuard.Firewall.Tests/
-│   └── NetGuard.IntegrationTests/
+│   ├── core/
+│   ├── network/
+│   ├── firewall/
+│   ├── persistence/
+│   └── integration/
 │
+├── benches/
+│   └── network.rs
+│
+├── migrations/
 ├── docs/
 ├── scripts/
 ├── docker/
 ├── .github/
 │   └── workflows/
-├── NetGuard.sln
+│
+├── Cargo.toml
+├── Cargo.lock
 ├── Dockerfile
 ├── README.md
 └── LICENSE
@@ -560,12 +788,21 @@ netguard/
 
 ## Requirements
 
-* .NET SDK
-* Linux, Windows, or macOS
+* Rust toolchain
+* Cargo
+* Linux recommended for firewall enforcement
 * Git
 * A local network for authorized testing
 
-For firewall enforcement, some features may require appropriate operating-system permissions.
+For development:
+
+```bash
+rustup update
+```
+
+Some network discovery operations require elevated privileges depending on the operating system and interface being used.
+
+Firewall enforcement requires appropriate Linux permissions.
 
 > NetGuard should only be used on networks and systems you own or are explicitly authorized to assess.
 
@@ -578,85 +815,137 @@ git clone https://github.com/yourusername/netguard.git
 cd netguard
 ```
 
-## Restore dependencies
-
-```bash
-dotnet restore
-```
+---
 
 ## Build
 
 ```bash
-dotnet build
+cargo build
 ```
+
+For an optimized build:
+
+```bash
+cargo build --release
+```
+
+---
 
 ## Run
 
 ```bash
-dotnet run --project src/NetGuard.Api
+cargo run
 ```
 
-Start the web application:
+Or run the compiled binary:
 
 ```bash
-dotnet run --project src/NetGuard.Web
+./target/release/netguard
+```
+
+---
+
+## CLI
+
+Example:
+
+```bash
+cargo run -- scan
+```
+
+```bash
+cargo run -- devices
+```
+
+```bash
+cargo run -- services
+```
+
+```bash
+cargo run -- changes
+```
+
+```bash
+cargo run -- firewall status
 ```
 
 ---
 
 # Configuration
 
-Example configuration:
+NetGuard uses structured configuration loaded through the application configuration layer.
 
-```json
-{
-  "NetGuard": {
-    "ScanIntervalMinutes": 5,
-    "ConnectionTimeoutMilliseconds": 1000,
-    "DefaultPolicy": "Allow",
-    "MonitorChanges": true
-  }
-}
+Example:
+
+```toml
+[network]
+scan_interval_seconds = 300
+connection_timeout_ms = 1000
+monitor_changes = true
+
+[network.discovery]
+arp = true
+icmp = true
+tcp = true
+
+[policy]
+default_action = "allow"
+
+[persistence]
+database_url = "sqlite://netguard.db"
+
+[logging]
+level = "info"
 ```
 
-Sensitive configuration such as credentials and cloud secrets should not be committed to source control.
+Production PostgreSQL configuration can use an environment variable:
 
-Local development secrets should use the appropriate .NET development secret mechanisms or environment variables.
+```bash
+export DATABASE_URL="postgres://user:password@localhost/netguard"
+```
+
+Sensitive configuration and database credentials should never be committed to source control.
 
 ---
 
 # API
 
-The ASP.NET Core API exposes network and security information to the dashboard.
+The Axum API exposes network and security information to the dashboard and external clients.
 
-Example endpoints:
+Example:
 
-| Method | Endpoint               | Description                      |
-| ------ | ---------------------- | -------------------------------- |
-| GET    | `/api/devices`         | List discovered devices          |
-| GET    | `/api/devices/{id}`    | Get device details               |
-| GET    | `/api/scans`           | List network snapshots           |
-| GET    | `/api/changes`         | List detected changes            |
-| GET    | `/api/events`          | List security events             |
-| GET    | `/api/rules`           | List firewall rules              |
-| POST   | `/api/rules`           | Create a firewall rule           |
-| PUT    | `/api/rules/{id}`      | Update a firewall rule           |
-| DELETE | `/api/rules/{id}`      | Delete a firewall rule           |
-| GET    | `/api/firewall/status` | Get firewall status              |
-| POST   | `/api/scans`           | Start an authorized network scan |
+```text
+GET /api/devices
+GET /api/devices/:id
+GET /api/scans
+GET /api/changes
+GET /api/events
+GET /api/rules
+POST /api/rules
+PUT /api/rules/:id
+DELETE /api/rules/:id
+GET /api/firewall/status
+POST /api/scans
+```
 
-The API documentation is available through ASP.NET Core's OpenAPI/Swagger tooling during development.
+API payloads use `serde` and `serde_json`.
 
 ---
 
 # Testing
 
-NetGuard uses automated tests for the policy engine, network state handling, change detection, and API behavior.
+NetGuard uses Rust's built-in testing infrastructure.
 
 Run the test suite:
 
 ```bash
-dotnet test
+cargo test
+```
+
+For coverage:
+
+```bash
+cargo tarpaulin
 ```
 
 Testing focuses particularly on deterministic security behavior.
@@ -665,79 +954,116 @@ Example:
 
 ```text
 Unknown device + TCP/445
-        ↓
+        │
+        ▼
 Policy evaluation
-        ↓
+        │
+        ▼
 DENY
 ```
 
-and:
+And:
 
 ```text
 Trusted device + HTTPS
-        ↓
+        │
+        ▼
 Policy evaluation
-        ↓
+        │
+        ▼
 ALLOW
 ```
 
-Firewall integration tests should use a controlled test environment and should never modify firewall policy on an unintended system.
+Firewall integration tests should run inside a controlled environment and should never modify firewall policy on an unintended system.
 
 ---
 
-# Azure Deployment
+# Benchmarking
 
-NetGuard is designed to support deployment to Microsoft Azure.
+Performance-sensitive network operations are benchmarked using:
 
-A production deployment can use:
+* `criterion`
+
+Example benchmark areas:
 
 ```text
-                    Azure
-                      │
-          ┌───────────┼───────────┐
-          │           │           │
-          ▼           ▼           ▼
-     App Service   Azure SQL   Blob Storage
-          │           │           │
-          └───────────┼───────────┘
-                      │
-                      ▼
-              Application Insights
+Host discovery
+TCP connection scanning
+Packet parsing
+CIDR processing
+Snapshot comparison
+Policy evaluation
+Rule matching
+Serialization
 ```
 
-Potential Azure components include:
+The goal is to measure the performance of the underlying components rather than simply reporting application-level throughput.
 
-### Azure App Service / Container Apps
+Example:
 
-Hosts the ASP.NET Core application.
+```text
+Benchmark: snapshot_comparison
 
-### Azure SQL
+1,000 devices
+10,000 services
 
-Stores:
+Mean:
+...
 
-* Devices
-* Network snapshots
-* Services
-* Security events
-* Firewall policies
-* Risk findings
+P95:
+...
 
-### Azure Blob Storage
+P99:
+...
+```
 
-Can store generated reports and exported historical data.
+---
 
-### Application Insights
+# Docker
 
-Provides:
+NetGuard can be containerized using Docker.
 
-* Application telemetry
-* Request monitoring
-* Exceptions
-* Performance data
+Build:
 
-### Key Vault
+```bash
+docker build -t netguard .
+```
 
-Used for production secrets and credentials where required.
+Run:
+
+```bash
+docker run --rm -p 8080:8080 netguard
+```
+
+Network discovery and firewall enforcement may require additional container capabilities depending on the deployment environment.
+
+For security-sensitive functionality, host-level or dedicated lab deployment may be preferable to a restricted container.
+
+---
+
+# CI/CD
+
+GitHub Actions is used for automated validation.
+
+The CI pipeline can perform:
+
+```text
+cargo fmt --check
+        │
+        ▼
+cargo clippy
+        │
+        ▼
+cargo test
+        │
+        ▼
+cargo build --release
+        │
+        ▼
+Docker build
+```
+
+Additional jobs can run coverage and benchmarks where appropriate.
 
 ---
 
@@ -756,7 +1082,13 @@ NetGuard should not be used to scan or interfere with networks belonging to othe
 
 Firewall changes can affect network connectivity. Development and integration testing should therefore be performed inside an isolated or disposable environment whenever possible.
 
-NetGuard does not intentionally collect passwords, private keys, or other authentication secrets.
+NetGuard does not intentionally collect:
+
+* Passwords
+* Private keys
+* Authentication secrets
+
+Packet capture functionality, when enabled, should be treated as sensitive because captured network traffic may contain information that users did not intend to expose.
 
 ---
 
@@ -764,84 +1096,105 @@ NetGuard does not intentionally collect passwords, private keys, or other authen
 
 ## Phase 1 — Network Engine
 
-* [ ] Network interface discovery
-* [ ] CIDR parsing
-* [ ] Host discovery
-* [ ] TCP service scanning
-* [ ] Hostname resolution
-* [ ] Device model
+* Network interface discovery
+* CIDR parsing
+* ARP discovery
+* ICMP discovery
+* TCP service scanning
+* Hostname resolution
+* Device model
+* Async scanning with Tokio
+* Raw socket handling
+* Network snapshot model
+
+---
 
 ## Phase 2 — Network Inventory
 
-* [ ] Network snapshots
-* [ ] Persistent device inventory
-* [ ] Service history
-* [ ] New device detection
-* [ ] Removed device detection
-* [ ] New service detection
-* [ ] Removed service detection
-* [ ] Snapshot comparison
+* Network snapshots
+* Persistent device inventory
+* Service history
+* New device detection
+* Removed device detection
+* New service detection
+* Removed service detection
+* Snapshot comparison
+* Historical queries
+
+---
 
 ## Phase 3 — Firewall & Policy Engine
 
-* [ ] Rule model
-* [ ] Allow/deny evaluation
-* [ ] Source/destination matching
-* [ ] TCP/UDP matching
-* [ ] Port matching
-* [ ] Rule priorities
-* [ ] Enable/disable rules
-* [ ] Default policy
-* [ ] Device trust states
-* [ ] Firewall abstraction
-* [ ] Linux firewall adapter
-* [ ] Firewall status
-* [ ] Rule hit counters
+* Rule model
+* Allow/deny evaluation
+* Source/destination matching
+* TCP/UDP matching
+* Port matching
+* Rule priorities
+* Enable/disable rules
+* Default policy
+* Device trust states
+* Firewall abstraction
+* Linux nftables adapter
+* Firewall status
+* Rule hit counters
+
+---
 
 ## Phase 4 — Security Intelligence
 
-* [ ] Security event model
-* [ ] Blocked connection logging
-* [ ] Policy violation detection
-* [ ] Unusual connection detection
-* [ ] Previously unseen destination detection
-* [ ] Attack-surface scoring
-* [ ] Explainable risk findings
-* [ ] Evidence records
-* [ ] Alert system
+* Security event model
+* Blocked connection logging
+* Policy violation detection
+* Unusual connection detection
+* Previously unseen destination detection
+* Attack-surface scoring
+* Explainable risk findings
+* Evidence records
+* Alert system
+* Optional packet-capture integration
+
+---
 
 ## Phase 5 — Web Application
 
-* [ ] ASP.NET Core API
-* [ ] OpenAPI documentation
-* [ ] Blazor dashboard
-* [ ] Device inventory
-* [ ] Network topology/inventory view
-* [ ] Scan history
-* [ ] Change timeline
-* [ ] Attack-surface view
-* [ ] Firewall rules
-* [ ] Security events
-* [ ] Risk findings
+* Axum API
+* API documentation
+* HTMX dashboard
+* Device inventory
+* Network topology/inventory view
+* Scan history
+* Change timeline
+* Attack-surface view
+* Firewall rules
+* Security events
+* Risk findings
 
-## Phase 6 — Azure
+---
 
-* [ ] Azure deployment
-* [ ] Azure SQL
-* [ ] Application Insights
-* [ ] Blob Storage
-* [ ] Secure configuration
-* [ ] CI/CD pipeline
+## Phase 6 — Persistence & Deployment
+
+* SQLite development backend
+* PostgreSQL production backend
+* SQLx migrations
+* Docker deployment
+* Configuration management
+* Production logging
+* CI/CD pipeline
+
+---
 
 ## Phase 7 — Validation
 
-* [ ] Unit test suite
-* [ ] Integration tests
-* [ ] Policy evaluation tests
-* [ ] Firewall integration tests
-* [ ] Security scenario tests
-* [ ] Regression tests
-* [ ] Isolated network test environment
+* Unit test suite
+* Integration tests
+* Policy evaluation tests
+* Firewall integration tests
+* Security scenario tests
+* Regression tests
+* Benchmark suite
+* Isolated network test environment
+* Failure and recovery testing
 
 ---
 
@@ -864,25 +1217,49 @@ rather than simply:
 BLOCKED
 ```
 
+---
+
 ### Least Privilege
 
 Unknown devices should not automatically receive the same access as trusted devices.
+
+---
 
 ### Defense in Depth
 
 Network discovery, change detection, policy enforcement, and monitoring operate together rather than relying on a single security mechanism.
 
+---
+
 ### Historical Evidence
 
 Security decisions should be backed by observable events and historical network state.
+
+---
 
 ### Safe by Default
 
 Scanning and firewall operations should require explicit configuration and authorization.
 
-### Cross-Platform
+---
 
-The core application should remain portable across supported operating systems, while OS-specific firewall functionality is isolated behind platform-specific adapters.
+### Separation of Concerns
+
+Network observation, security analysis, persistence, API handling, and firewall enforcement should remain independently testable.
+
+---
+
+### Minimal Dependencies
+
+NetGuard should use specialized dependencies where they provide meaningful capabilities while keeping the core architecture understandable.
+
+---
+
+### Performance Awareness
+
+Network operations should be asynchronous and measurable.
+
+Performance-sensitive code should be benchmarked rather than optimized based on assumptions.
 
 ---
 
@@ -915,6 +1292,33 @@ Security Evidence
 
 ---
 
+# Technology Summary
+
+| Component         | Technology                        |
+| ----------------- | --------------------------------- |
+| Language          | Rust                              |
+| Async Runtime     | Tokio                             |
+| Network Discovery | `pnet`, `socket2`                 |
+| Raw Networking    | Raw sockets / packet construction |
+| Packet Capture    | `pcap`                            |
+| Firewall          | nftables / `nftnl` / `rtnetlink`  |
+| CLI               | `clap`                            |
+| Serialization     | `serde`, `serde_json`, `bincode`  |
+| Persistence       | `sqlx`                            |
+| Development DB    | SQLite                            |
+| Production DB     | PostgreSQL                        |
+| Web API           | Axum                              |
+| Dashboard         | Axum + HTMX                       |
+| Optional Frontend | Leptos                            |
+| Logging           | `tracing`, `tracing-subscriber`   |
+| Testing           | `cargo test`                      |
+| Coverage          | `cargo tarpaulin`                 |
+| Benchmarking      | Criterion                         |
+| Containerization  | Docker                            |
+| CI/CD             | GitHub Actions                    |
+
+---
+
 # License
 
 MIT License — see [`LICENSE`](LICENSE).
@@ -929,22 +1333,25 @@ GitHub: `@keletso-m`
 
 ---
 
-## Project Status
+# Project Status
 
 **Active Development**
 
 NetGuard is a learning and portfolio project focused on developing practical experience with:
 
-* C#
-* .NET
-* ASP.NET Core
+* Rust
+* Tokio
 * Network programming
+* Raw packet handling
 * Security engineering
+* Network discovery
 * Policy engines
 * Firewall integration
-* Distributed/cloud application architecture
-* Azure
+* Persistence
+* Async systems
+* Observability
 * Automated testing
+* Performance benchmarking
 * Production-oriented software engineering
 
 The project is developed incrementally, with functionality added only after the underlying component is understood and tested.
