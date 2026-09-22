@@ -1,0 +1,11 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+firewall-engine = { version = "0.1.0", path = "../crates/firewall-engine" }
+intel = { version = "0.1.0", path = "../crates/intel" }
+inventory = { version = "0.1.0", path = "../crates/inventory" }
+net-engine = { version = "0.1.0", path = "../crates/net-engine" }
+web = { version = "0.1.0", path = "../crates/web" }
